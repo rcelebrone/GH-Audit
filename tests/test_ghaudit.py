@@ -125,6 +125,14 @@ class TestParseArgs:
         args = _parse("--debug")
         assert args.debug is True
 
+    def test_max_workers_default(self):
+        args = _parse("")
+        assert args.max_workers == 5
+
+    def test_max_workers_custom(self):
+        args = _parse("--max-workers 2")
+        assert args.max_workers == 2
+
     def test_users(self):
         args = _parse("--users user1 user2 user3")
         assert args.users == ["user1", "user2", "user3"]
@@ -527,6 +535,30 @@ class TestMain:
             ghaudit.main()
         called_users = mock_audit.call_args[1].get("users")
         assert called_users == ["carol"]
+
+    def test_max_workers_passa_para_audit_users(self):
+        with patch("sys.argv", ["ghaudit", "--max-workers", "2"]), \
+             patch("ghaudit.GITHUB_TOKEN", "tok"), \
+             patch("ghaudit.GITHUB_USERS", ["dev1"]), \
+             patch("ghaudit.GITHUB_ORGS", []), \
+             patch("ghaudit.GITHUB_SQUADS", {}), \
+             patch("ghaudit.AuditCache"), \
+             patch("ghaudit.audit_users",
+                   return_value=([_make_result()], self._DATE_START, self._DATE_END)) as mock_audit:
+            ghaudit.main()
+        assert mock_audit.call_args[1].get("max_workers") == 2
+
+    def test_max_workers_default_e_5(self):
+        with patch("sys.argv", ["ghaudit"]), \
+             patch("ghaudit.GITHUB_TOKEN", "tok"), \
+             patch("ghaudit.GITHUB_USERS", ["dev1"]), \
+             patch("ghaudit.GITHUB_ORGS", []), \
+             patch("ghaudit.GITHUB_SQUADS", {}), \
+             patch("ghaudit.AuditCache"), \
+             patch("ghaudit.audit_users",
+                   return_value=([_make_result()], self._DATE_START, self._DATE_END)) as mock_audit:
+            ghaudit.main()
+        assert mock_audit.call_args[1].get("max_workers") == 5
 
 
 # ── config.py — leitura de variáveis de ambiente ──────────────────────────────

@@ -92,6 +92,7 @@ python ghaudit.py --from 2026-03-01 --to 2026-03-18
 | `--db CAMINHO` | — | Banco SQLite alternativo (padrão: `~/.ghaudit/cache.db`) |
 | `--verbose` | `-v` | Exibe logs de progresso por usuário |
 | `--debug` | — | Exibe logs detalhados (queries, rate limit) |
+| `--max-workers N` | — | Usuários em paralelo (padrão: 5). Reduza para evitar rate limit com `--force` |
 
 ### Exemplos práticos
 
@@ -182,10 +183,10 @@ SCI = (PRs × 10) + (Commits × 2) + (Reviews × 8) + (Comentários × 3) + min(
 
 | Perfil | Condição |
 |---|---|
-| 😶 Bloqueado/Reunião | Atividade total = 0 |
+| 😶 Bloqueado | Atividade total = 0 |
 | 🔧 Refatorador | Arquivos > 20 e PRs = 1 |
 | 🔎 O Revisor | Reviews > 3 e Commits < 2 |
-| 🏗️ O Construtor | Commits > 5 ou PRs ≥ 2 |
+| 🔨 Construtor | Commits > 5 ou PRs ≥ 2 |
 | 🤝 Colaborativo | PRs ≥ 1 e Reviews ≥ 2 |
 | ⚡ Ativo | Demais casos com atividade |
 

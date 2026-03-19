@@ -95,7 +95,7 @@ class TestGetProfile:
     def test_no_activity(self):
         emoji, tag = get_profile(0, 0, 0, 0)
         assert emoji == "😶"
-        assert tag == "Bloqueado/Reunião"
+        assert tag == "Bloqueado"
 
     def test_refatorador(self):
         # files > 20 e prs == 1
@@ -122,14 +122,14 @@ class TestGetProfile:
     def test_construtor_por_commits(self):
         # commits > 5
         emoji, tag = get_profile(commits=6, prs=0, reviews=0, files=0)
-        assert emoji == "🏗️"
-        assert tag == "O Construtor"
+        assert emoji == "🔨"
+        assert tag == "Construtor"
 
     def test_construtor_por_prs(self):
         # prs >= 2
         emoji, tag = get_profile(commits=1, prs=2, reviews=0, files=0)
-        assert emoji == "🏗️"
-        assert tag == "O Construtor"
+        assert emoji == "🔨"
+        assert tag == "Construtor"
 
     def test_colaborativo(self):
         # prs >= 1 e reviews >= 2
@@ -149,7 +149,7 @@ class TestGetProfile:
         assert emoji == "🔧"
 
     def test_prioridade_revisor_sobre_construtor(self):
-        # reviews=4, commits=1 → O Revisor tem prioridade sobre O Construtor
+        # reviews=4, commits=1 → O Revisor tem prioridade sobre Construtor
         # (commits=1 < 2, prs=0 < 2, então não é Construtor)
         emoji, _ = get_profile(commits=1, prs=0, reviews=4, files=0)
         assert emoji == "🔎"
@@ -157,7 +157,7 @@ class TestGetProfile:
     def test_construtor_prioridade_sobre_colaborativo(self):
         # prs=2, reviews=3 → Construtor (prs >= 2) antes de Colaborativo
         emoji, _ = get_profile(commits=0, prs=2, reviews=3, files=0)
-        assert emoji == "🏗️"
+        assert emoji == "🔨"
 
 
 # ── get_insights ──────────────────────────────────────────────────────────────

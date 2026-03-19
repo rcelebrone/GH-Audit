@@ -397,6 +397,12 @@ def parse_args() -> argparse.Namespace:
         type=str, default=None, metavar="CAMINHO",
         help=f"Caminho do banco SQLite de cache. Padrão: {DEFAULT_DB_PATH}",
     )
+    parser.add_argument(
+        "--max-workers",
+        type=int, default=5, metavar="N",
+        help="Máximo de usuários processados em paralelo (padrão: 5). "
+             "Reduza para evitar rate limit ao usar --force com muitos usuários.",
+    )
 
     return parser.parse_args()
 
@@ -585,6 +591,7 @@ def main() -> None:
                     weekly=args.weekly,
                     monthly=args.month,
                     date_range=date_range,
+                    max_workers=args.max_workers,
                     cache=cache,
                     force=args.force,
                     progress_callback=_on_complete,
@@ -598,6 +605,7 @@ def main() -> None:
                 weekly=args.weekly,
                 monthly=args.month,
                 date_range=date_range,
+                max_workers=args.max_workers,
                 cache=cache,
                 force=args.force,
             )

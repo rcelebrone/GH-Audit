@@ -44,17 +44,17 @@ def get_profile(
     Classifica o desenvolvedor e retorna (emoji, label).
 
     Ordem de prioridade das regras:
-    1. Sem atividade alguma          → Bloqueado/Reunião
+    1. Sem atividade alguma          → Bloqueado
     2. Muitos arquivos, poucos PRs   → Refatorador
     3. Muitos reviews, poucos commits→ O Revisor
-    4. Muitos commits ou vários PRs  → O Construtor
+    4. Muitos commits ou vários PRs  → Construtor
     5. Equilíbrio PR + Reviews       → Colaborativo
     6. Qualquer outra atividade      → Ativo
     """
     total = commits + prs + reviews + files
 
     if total == 0:
-        return "😶", "Bloqueado/Reunião"
+        return "😶", "Bloqueado"
 
     if files > 20 and prs == 1:
         return "🔧", "Refatorador"
@@ -63,7 +63,7 @@ def get_profile(
         return "🔎", "O Revisor"
 
     if commits > 5 or prs >= 2:
-        return "🏗️", "O Construtor"
+        return "🔨", "Construtor"
 
     if prs >= 1 and reviews >= 2:
         return "🤝", "Colaborativo"
