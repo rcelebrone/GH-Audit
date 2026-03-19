@@ -197,7 +197,7 @@ SCI = (PRs × 10) + (Commits × 2) + (Reviews × 8) + (Comentários × 3) + min(
 | Insight | Condição |
 |---|---|
 | 🔥 Alta Entrega | SCI > 30 |
-| ⚠️ Gargalo de Review | PRs > 0 e Reviews = 0 |
+| 🚨 Gargalo de Review | PRs > 0 e Reviews = 0 |
 | 📦 PR Gigante (risco) | Arquivos alterados > 50 |
 
 ---

@@ -510,7 +510,7 @@ def main() -> None:
             f"{date_range[1].strftime('%d/%m/%Y')}"
         )
     elif args.weekly:
-        mode_label = "🗓️  Semanal (últimos 5 dias úteis)"
+        mode_label = "📅 Semanal (últimos 5 dias úteis)"
     elif args.month:
         mode_label = "📆 Mensal (últimos 30 dias úteis)"
     else:

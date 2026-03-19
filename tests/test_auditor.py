@@ -315,7 +315,7 @@ class TestAuditUsers:
             "commits": 5, "prs": 2, "reviews": 3, "comments": 1,
             "arquivos_alterados": 10, "additions": 100, "deletions": 50,
             "sci": 50.0, "sci_level": "green",
-            "profile_emoji": "🏗️", "profile_tag": "O Construtor",
+            "profile_emoji": "🔨", "profile_tag": "Construtor",
             "insights": [], "is_mvp": False, "from_cache": False,
             "erro": None, "data": "14/03/2025",
             "data_range": "14/03/2025 → 14/03/2025",

@@ -178,15 +178,15 @@ class TestGetInsights:
     def test_gargalo_review(self):
         # prs > 0 e reviews == 0
         insights = get_insights(10.0, 1, 0, 10)
-        assert "⚠️ Gargalo de Review" in insights
+        assert "🚨 Gargalo de Review" in insights
 
     def test_sem_gargalo_sem_prs(self):
         insights = get_insights(10.0, 0, 0, 10)
-        assert "⚠️ Gargalo de Review" not in insights
+        assert "🚨 Gargalo de Review" not in insights
 
     def test_sem_gargalo_com_reviews(self):
         insights = get_insights(10.0, 1, 1, 10)
-        assert "⚠️ Gargalo de Review" not in insights
+        assert "🚨 Gargalo de Review" not in insights
 
     def test_pr_gigante(self):
         insights = get_insights(0.0, 0, 0, 51)
@@ -200,6 +200,6 @@ class TestGetInsights:
     def test_todos_os_insights(self):
         insights = get_insights(35.0, 1, 0, 60)
         assert "🔥 Alta Entrega" in insights
-        assert "⚠️ Gargalo de Review" in insights
+        assert "🚨 Gargalo de Review" in insights
         assert "📦 PR Gigante (risco)" in insights
         assert len(insights) == 3

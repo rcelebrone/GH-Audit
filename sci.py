@@ -96,7 +96,7 @@ def get_insights(
         notes.append("🔥 Alta Entrega")
 
     if prs > 0 and reviews == 0:
-        notes.append("⚠️ Gargalo de Review")
+        notes.append("🚨 Gargalo de Review")
 
     if files > 50:
         notes.append("📦 PR Gigante (risco)")
