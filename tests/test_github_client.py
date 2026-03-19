@@ -293,148 +293,129 @@ class TestGetPrsForUser:
         assert ids == {99, 100}   # 2 únicos, não 3
 
 
-# ── get_activity_from_events ──────────────────────────────────────────────────
+# ── get_reviews_for_user (Search API: reviewed-by:) ───────────────────────────
 
-def _make_event(etype, created_at_str, body="", repo="org/repo"):
-    event = {
-        "type": etype,
-        "created_at": created_at_str,
-        "org": {"login": "org"},
-        "repo": {"name": repo},
-        "payload": {},
-    }
-    if etype == "PullRequestReviewEvent":
-        event["payload"] = {"review": {"body": body}}
-    return event
-
-
-class TestGetActivityFromEvents:
-    DATE_IN   = "2025-03-14T12:00:00Z"
-    DATE_BEFORE = "2025-03-13T23:59:59Z"
-    DATE_AFTER  = "2025-03-15T00:00:01Z"
-
+class TestGetReviewsForUser:
     @pytest.fixture
-    def date_start(self):
-        return datetime(2025, 3, 14, 0, 0, 0, tzinfo=timezone.utc)
-
-    @pytest.fixture
-    def date_end(self):
-        return datetime(2025, 3, 14, 23, 59, 59, tzinfo=timezone.utc)
-
-    def _setup_events(self, client, events):
-        client._session_mock.get.return_value = _make_response(200, events)
-
-    def test_sem_eventos(self, client, date_start, date_end):
-        self._setup_events(client, [])
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert (reviews, comments) == (0, 0)
-
-    def test_review_sem_body(self, client, date_start, date_end):
-        self._setup_events(client, [_make_event("PullRequestReviewEvent", self.DATE_IN, body="")])
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert reviews == 1
-        assert comments == 0
-
-    def test_review_com_body(self, client, date_start, date_end):
-        self._setup_events(client, [_make_event("PullRequestReviewEvent", self.DATE_IN, body="LGTM")])
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert reviews == 1
-        assert comments == 1  # body conta como comentário
-
-    def test_review_comment_event(self, client, date_start, date_end):
-        self._setup_events(client, [_make_event("PullRequestReviewCommentEvent", self.DATE_IN)])
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert reviews == 0
-        assert comments == 1
-
-    def test_evento_antes_do_range_para_paginacao(self, client, date_start, date_end):
-        events_page1 = [
-            _make_event("PullRequestReviewEvent", self.DATE_IN),
-            _make_event("PullRequestReviewEvent", self.DATE_BEFORE),  # antes → para
-        ]
-        client._session_mock.get.return_value = _make_response(200, events_page1)
-
-        reviews, _ = client.get_activity_from_events("user", date_start, date_end, max_pages=5)
-
-        # Só 1 review dentro do range; parou na segunda página
-        assert reviews == 1
-        assert client._session_mock.get.call_count == 1  # só 1 página buscada
-
-    def test_evento_apos_range_ignorado(self, client, date_start, date_end):
-        events = [
-            _make_event("PullRequestReviewEvent", self.DATE_AFTER),  # fora do range
-            _make_event("PullRequestReviewEvent", self.DATE_IN),     # dentro
-        ]
-        self._setup_events(client, events)
-        reviews, _ = client.get_activity_from_events("user", date_start, date_end)
-        assert reviews == 1
-
-    def test_filtro_org_por_login(self, client, date_start, date_end):
-        event_org_a = _make_event("PullRequestReviewEvent", self.DATE_IN, repo="OrgA/repo")
-        event_org_a["org"] = {"login": "OrgA"}
-        event_org_b = _make_event("PullRequestReviewEvent", self.DATE_IN, repo="OrgB/repo")
-        event_org_b["org"] = {"login": "OrgB"}
-
-        self._setup_events(client, [event_org_a, event_org_b])
-        reviews, _ = client.get_activity_from_events("user", date_start, date_end, orgs=["OrgA"])
-        assert reviews == 1
-
-    def test_filtro_org_por_repo_name(self, client, date_start, date_end):
-        ev = _make_event("PullRequestReviewEvent", self.DATE_IN, repo="MyOrg/my-repo")
-        ev["org"] = {}  # sem org explícita, usa repo name
-        self._setup_events(client, [ev])
-        reviews, _ = client.get_activity_from_events("user", date_start, date_end, orgs=["MyOrg"])
-        assert reviews == 1
-
-    def test_filtro_multiplas_orgs(self, client, date_start, date_end):
-        ev_a = _make_event("PullRequestReviewEvent", self.DATE_IN, repo="OrgA/repo")
-        ev_a["org"] = {"login": "OrgA"}
-        ev_b = _make_event("PullRequestReviewCommentEvent", self.DATE_IN, repo="OrgB/repo")
-        ev_b["org"] = {"login": "OrgB"}
-        ev_c = _make_event("PullRequestReviewEvent", self.DATE_IN, repo="OrgC/repo")
-        ev_c["org"] = {"login": "OrgC"}
-
-        self._setup_events(client, [ev_a, ev_b, ev_c])
-        reviews, comments = client.get_activity_from_events(
-            "user", date_start, date_end, orgs=["OrgA", "OrgB"]
+    def dates(self):
+        return (
+            datetime(2025, 3, 14, 0,  0,  0,  tzinfo=timezone.utc),
+            datetime(2025, 3, 14, 23, 59, 59, tzinfo=timezone.utc),
         )
-        assert reviews == 1   # só OrgA
-        assert comments == 1  # só OrgB
 
-    def test_max_pages_limita_chamadas(self, client, date_start, date_end):
-        # Retorna sempre 30 eventos (página não-vazia) para não parar por tamanho
-        events = [_make_event("PullRequestReviewCommentEvent", self.DATE_IN)] * 30
-        client._session_mock.get.return_value = _make_response(200, events)
+    def _setup(self, client, items, total_count=None):
+        if total_count is None:
+            total_count = len(items)
+        client._session_mock.get.return_value = _make_response(
+            200, {"items": items, "total_count": total_count}
+        )
 
-        client.get_activity_from_events("user", date_start, date_end, max_pages=2)
+    def test_sem_orgs_retorna_contagem(self, client, dates):
+        self._setup(client, [{"id": 1}, {"id": 2}, {"id": 3}])
+        count = client.get_reviews_for_user("dev", *dates)
+        assert count == 3
 
-        assert client._session_mock.get.call_count == 2
+    def test_resultado_vazio(self, client, dates):
+        self._setup(client, [])
+        assert client.get_reviews_for_user("dev", *dates) == 0
 
-    def test_pagina_menor_que_30_encerra_paginacao(self, client, date_start, date_end):
-        # Primeira página: 5 eventos (menos que 30 → encerra)
-        events = [_make_event("PullRequestReviewCommentEvent", self.DATE_IN)] * 5
-        client._session_mock.get.return_value = _make_response(200, events)
+    def test_query_contem_reviewed_by(self, client, dates):
+        self._setup(client, [])
+        client.get_reviews_for_user("dev", *dates)
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "reviewed-by:dev" in params["q"]
+        assert "is:pr" in params["q"]
 
-        client.get_activity_from_events("user", date_start, date_end, max_pages=10)
+    def test_org_unica_inclui_org_na_query(self, client, dates):
+        self._setup(client, [])
+        client.get_reviews_for_user("dev", *dates, orgs=["MyOrg"])
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "org:MyOrg" in params["q"]
 
-        assert client._session_mock.get.call_count == 1
+    def test_sem_orgs_nao_inclui_org_na_query(self, client, dates):
+        self._setup(client, [])
+        client.get_reviews_for_user("dev", *dates, orgs=None)
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "org:" not in params["q"]
 
-    def test_mistura_de_eventos(self, client, date_start, date_end):
-        # 2 reviews (1 com body) + 3 inline comments → reviews=2, comments=4
-        events = [
-            _make_event("PullRequestReviewEvent", self.DATE_IN, body="Looks good"),  # rev+comment
-            _make_event("PullRequestReviewEvent", self.DATE_IN, body=""),            # só review
-            _make_event("PullRequestReviewCommentEvent", self.DATE_IN),
-            _make_event("PullRequestReviewCommentEvent", self.DATE_IN),
-            _make_event("PullRequestReviewCommentEvent", self.DATE_IN),
+    def test_multiplas_orgs_deduplica_por_id(self, client, dates):
+        pr_shared = {"id": 99}
+        pr_unique  = {"id": 100}
+        client._session_mock.get.side_effect = [
+            _make_response(200, {"items": [pr_shared], "total_count": 1}),
+            _make_response(200, {"items": [pr_shared, pr_unique], "total_count": 2}),
         ]
-        self._setup_events(client, events)
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert reviews == 2
-        assert comments == 4  # 1 body-review + 3 inline
+        count = client.get_reviews_for_user("dev", *dates, orgs=["OrgA", "OrgB"])
+        assert count == 2   # 99 e 100 — o duplicado 99 conta só uma vez
 
-    def test_erro_na_api_encerra_sem_crash(self, client, date_start, date_end):
-        import requests
-        client._session_mock.get.side_effect = requests.ConnectionError("network error")
-        reviews, comments = client.get_activity_from_events("user", date_start, date_end)
-        assert (reviews, comments) == (0, 0)
+    def test_multiplas_orgs_faz_busca_por_org(self, client, dates):
+        client._session_mock.get.return_value = _make_response(200, {"items": [], "total_count": 0})
+        client.get_reviews_for_user("dev", *dates, orgs=["OrgA", "OrgB"])
+        assert client._session_mock.get.call_count == 2  # 1 chamada por org
+
+
+# ── get_pr_comments_for_user (Search API: commenter:) ─────────────────────────
+
+class TestGetPrCommentsForUser:
+    @pytest.fixture
+    def dates(self):
+        return (
+            datetime(2025, 3, 14, 0,  0,  0,  tzinfo=timezone.utc),
+            datetime(2025, 3, 14, 23, 59, 59, tzinfo=timezone.utc),
+        )
+
+    def _setup(self, client, items, total_count=None):
+        if total_count is None:
+            total_count = len(items)
+        client._session_mock.get.return_value = _make_response(
+            200, {"items": items, "total_count": total_count}
+        )
+
+    def test_sem_orgs_retorna_contagem(self, client, dates):
+        self._setup(client, [{"id": 1}, {"id": 2}])
+        assert client.get_pr_comments_for_user("dev", *dates) == 2
+
+    def test_resultado_vazio(self, client, dates):
+        self._setup(client, [])
+        assert client.get_pr_comments_for_user("dev", *dates) == 0
+
+    def test_query_contem_commenter_e_exclui_author(self, client, dates):
+        self._setup(client, [])
+        client.get_pr_comments_for_user("dev", *dates)
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "commenter:dev" in params["q"]
+        assert "-author:dev" in params["q"]
+        assert "is:pr" in params["q"]
+
+    def test_org_unica_inclui_org_na_query(self, client, dates):
+        self._setup(client, [])
+        client.get_pr_comments_for_user("dev", *dates, orgs=["MyOrg"])
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "org:MyOrg" in params["q"]
+
+    def test_sem_orgs_nao_inclui_org_na_query(self, client, dates):
+        self._setup(client, [])
+        client.get_pr_comments_for_user("dev", *dates, orgs=None)
+        params = client._session_mock.get.call_args[1].get("params") or \
+                 client._session_mock.get.call_args[0][1]
+        assert "org:" not in params["q"]
+
+    def test_multiplas_orgs_deduplica_por_id(self, client, dates):
+        pr_shared = {"id": 77}
+        pr_unique  = {"id": 88}
+        client._session_mock.get.side_effect = [
+            _make_response(200, {"items": [pr_shared, pr_unique], "total_count": 2}),
+            _make_response(200, {"items": [pr_shared], "total_count": 1}),
+        ]
+        count = client.get_pr_comments_for_user("dev", *dates, orgs=["OrgA", "OrgB"])
+        assert count == 2   # 77 e 88 — 77 aparece em ambas as orgs
+
+    def test_multiplas_orgs_faz_busca_por_org(self, client, dates):
+        client._session_mock.get.return_value = _make_response(200, {"items": [], "total_count": 0})
+        client.get_pr_comments_for_user("dev", *dates, orgs=["OrgA", "OrgB"])
+        assert client._session_mock.get.call_count == 2

@@ -156,7 +156,8 @@ def _build_mock_client(
     mock = MagicMock()
     mock.get_commits_for_user.return_value = commits
     mock.get_prs_for_user.return_value = prs
-    mock.get_activity_from_events.return_value = (reviews, comments)
+    mock.get_reviews_for_user.return_value = reviews
+    mock.get_pr_comments_for_user.return_value = comments
     mock.get_commit_stats.return_value = (files, adds, dels)
     return mock
 
@@ -219,7 +220,8 @@ class TestAuditUsers:
         bad_mock = MagicMock()
         bad_mock.get_commits_for_user.side_effect = Exception("API error")
         bad_mock.get_prs_for_user.return_value = []
-        bad_mock.get_activity_from_events.return_value = (0, 0)
+        bad_mock.get_reviews_for_user.return_value = 0
+        bad_mock.get_pr_comments_for_user.return_value = 0
         bad_mock.get_commit_stats.return_value = (0, 0, 0)
 
         MockClient.side_effect = [good_mock, bad_mock]
@@ -285,39 +287,86 @@ class TestAuditUsers:
 
         mock.get_commit_stats.assert_called_once()
 
-    def test_eventos_max_pages_diario_e_10(self, MockClient):
-        mock = _build_mock_client()
-        MockClient.return_value = mock
+    def test_date_range_explicito_ignora_weekly_monthly(self, MockClient):
+        MockClient.return_value = _build_mock_client()
 
-        audit_users(users=["u"], token="tok", orgs=None, weekly=False, monthly=False)
+        explicit_start = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        explicit_end   = datetime(2025, 1, 31, 23, 59, 59, tzinfo=timezone.utc)
 
-        kwargs = mock.get_activity_from_events.call_args[1]
-        assert kwargs["max_pages"] == 10
-
-    def test_eventos_max_pages_semanal_e_20(self, MockClient):
-        mock = _build_mock_client()
-        MockClient.return_value = mock
-
-        with patch("auditor.get_weekly_range") as mw:
-            mw.return_value = (
-                datetime(2025, 3, 10, 0, 0, 0, tzinfo=timezone.utc),
-                datetime(2025, 3, 14, 23, 59, 59, tzinfo=timezone.utc),
+        with patch("auditor.get_weekly_range") as mock_weekly, \
+             patch("auditor.get_monthly_range") as mock_monthly, \
+             patch("auditor.get_audit_date") as mock_daily:
+            results, start, end = audit_users(
+                users=["u"], token="tok", orgs=None,
+                date_range=(explicit_start, explicit_end),
+                weekly=True,   # ignorado quando date_range é fornecido
+                monthly=True,  # ignorado quando date_range é fornecido
             )
-            audit_users(users=["u"], token="tok", orgs=None, weekly=True)
 
-        kwargs = mock.get_activity_from_events.call_args[1]
-        assert kwargs["max_pages"] == 20
+        mock_weekly.assert_not_called()
+        mock_monthly.assert_not_called()
+        mock_daily.assert_not_called()
+        assert start == explicit_start
+        assert end == explicit_end
 
-    def test_eventos_max_pages_mensal_e_40(self, MockClient):
-        mock = _build_mock_client()
+    def test_cache_hit_retorna_from_cache_true(self, MockClient):
+        cached_data = {
+            "usuario": "alice",
+            "commits": 5, "prs": 2, "reviews": 3, "comments": 1,
+            "arquivos_alterados": 10, "additions": 100, "deletions": 50,
+            "sci": 50.0, "sci_level": "green",
+            "profile_emoji": "🏗️", "profile_tag": "O Construtor",
+            "insights": [], "is_mvp": False, "from_cache": False,
+            "erro": None, "data": "14/03/2025",
+            "data_range": "14/03/2025 → 14/03/2025",
+        }
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = cached_data
+
+        results, _, _ = audit_users(
+            users=["alice"], token="tok", orgs=None,
+            count_files=False, cache=mock_cache, force=False,
+        )
+
+        assert results[0]["from_cache"] is True
+        # GitHubClient nunca foi instanciado (cache hit)
+        MockClient.assert_not_called()
+
+    def test_force_ignora_cache_e_chama_api(self, MockClient):
+        mock = _build_mock_client(commits=[{}])
         MockClient.return_value = mock
 
-        with patch("auditor.get_monthly_range") as mm:
-            mm.return_value = (
-                datetime(2025, 2, 1, 0, 0, 0, tzinfo=timezone.utc),
-                datetime(2025, 3, 14, 23, 59, 59, tzinfo=timezone.utc),
-            )
-            audit_users(users=["u"], token="tok", orgs=None, monthly=True)
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = {"sci": 999.0}  # deve ser ignorado
 
-        kwargs = mock.get_activity_from_events.call_args[1]
-        assert kwargs["max_pages"] == 40
+        audit_users(
+            users=["alice"], token="tok", orgs=None,
+            count_files=False, cache=mock_cache, force=True,
+        )
+
+        # cache.get nunca deve ser consultado quando force=True
+        mock_cache.get.assert_not_called()
+        mock.get_commits_for_user.assert_called()
+
+    def test_progress_callback_chamado_para_cada_usuario(self, MockClient):
+        MockClient.return_value = _build_mock_client()
+
+        called = []
+        audit_users(
+            users=["dev1", "dev2", "dev3"], token="tok", orgs=None,
+            count_files=False, progress_callback=lambda u: called.append(u),
+        )
+
+        assert sorted(called) == ["dev1", "dev2", "dev3"]
+
+    def test_cache_put_chamado_apos_sucesso(self, MockClient):
+        MockClient.return_value = _build_mock_client(commits=[{}])
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None  # cache miss
+
+        audit_users(
+            users=["alice"], token="tok", orgs=None,
+            count_files=False, cache=mock_cache, force=False,
+        )
+
+        mock_cache.put.assert_called_once()
